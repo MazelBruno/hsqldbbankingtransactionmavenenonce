@@ -34,6 +34,23 @@ public class BankingDAO {
 		}
 		return result;
 	}
+        
+        
+        public boolean customerExist(int id) throws Exception{
+            	
+		String sql = "SELECT * FROM Account WHERE CustomerID = ?";
+		try ( 	Connection myConnection = myDataSource.getConnection(); 
+			PreparedStatement statement = myConnection.prepareStatement(sql)) {
+			statement.setInt(1, id); // On fixe le 1° paramètre de la requête
+			try (ResultSet resultSet = statement.executeQuery()) {
+				if (resultSet.next()) { // est-ce qu'il y a un résultat ? (pas besoin de "while", il y a au plus un enregistrement)
+					// On récupère les champs de l'enregistrement courant
+					return true;
+				}
+			}
+		}
+		return false;
+        }
 	
 	/**
 	 * Transfère amount € du compte du client fromID vers le compte du client toID
@@ -44,7 +61,10 @@ public class BankingDAO {
 	 */
 	public void bankTransferTransaction(int fromID, int toID, float amount) throws Exception {
 		if (amount < 0)
-			throw new IllegalArgumentException("Le montant ne doit pas être négatif");
+                    throw new IllegalArgumentException("Le montant ne doit pas être négatif");
+                if (!customerExist(fromID)  | !customerExist(toID))
+                    throw new IllegalArgumentException("un des comptes n'éxiste pas");
+                
 	
 		String sql = "UPDATE Account SET Total = Total + ? WHERE CustomerID = ?";
 		try (	Connection myConnection = myDataSource.getConnection();
@@ -52,19 +72,27 @@ public class BankingDAO {
 			
 			myConnection.setAutoCommit(false); // On démarre une transaction
 			try {
-				// On débite le 1° client
-				statement.setFloat( 1, amount * -1);
-				statement.setInt(2, fromID);
-				int numberUpdated = statement.executeUpdate();
+                            if(this.balanceForCustomer(fromID)-amount<0){
+                                throw  new IllegalArgumentException("pas assez d'argent sur le compte a débiter");
+                            }else{
 
-				// On crédite le 2° client
-				statement.clearParameters();
-				statement.setFloat( 1, amount);
-				statement.setInt(2, toID);
-				numberUpdated = statement.executeUpdate();
 
-				// Tout s'est bien passé, on peut valider la transaction
-				myConnection.commit();
+
+                                    // On débite le 1° client
+                                    statement.setFloat( 1, amount * -1);
+                                    statement.setInt(2, fromID);
+                                    int numberUpdated = statement.executeUpdate();
+
+                                    // On crédite le 2° client
+                                    statement.clearParameters();
+                                    statement.setFloat( 1, amount);
+                                    statement.setInt(2, toID);
+                                    numberUpdated = statement.executeUpdate();
+
+                                    // Tout s'est bien passé, on peut valider la transaction
+                                    myConnection.commit();
+                                
+                            }
 			} catch (Exception ex) {
 				myConnection.rollback(); // On annule la transaction
 				throw ex;       
